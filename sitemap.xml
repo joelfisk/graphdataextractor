@@ -6,11 +6,4 @@
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>
   </url>
-  <!-- Exempel: när du gör nya SEO-sidor -->
-  <url>
-    <loc>https://graphdataextractor.com/extract-data-from-graph</loc>
-    <lastmod>2025-09-07</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.8</priority>
-  </url>
 </urlset>
