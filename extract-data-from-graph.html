@@ -1,0 +1,170 @@
+<style>
+/* Reset & grundstil */
+body {
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  line-height: 1.6;
+  color: #222;
+  background: #fff;
+  margin: 0;
+  padding: 0;
+}
+
+main {
+  max-width: 1100px;
+  margin: 2rem auto;
+  padding: 0 1rem;
+  display: grid;
+  grid-template-columns: 1fr 320px; /* två kolumner: innehåll + sidebar */
+  gap: 2rem;
+  align-items: start;
+  box-sizing: border-box;
+}
+
+
+.sidebar {
+  background: #fafafa;
+  padding: 1rem;
+  border-radius: 8px;
+  border: 1px solid #eee;
+  box-shadow: 0 1px 6px rgba(0,0,0,0.03);
+  font-size: 0.95rem;
+}
+
+.sidebar h2 { margin-top: 0; }
+
+/* Rubriker */
+h1, h2 {
+  line-height: 1.3;
+  font-weight: 600;
+}
+
+h1 {
+  font-size: 2rem;
+  margin-bottom: 1rem;
+  text-align: center;
+}
+
+h2 {
+  font-size: 1.25rem;
+  margin-top: 0.25rem;
+  margin-bottom: 0.5rem;
+}
+
+/* Textlistor */
+ol, ul {
+  padding-left: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+/* Call to action — tillåter CTA att spänna över båda kolumner på större skärmar */
+.cta {
+  text-align: center;
+  margin: 2.5rem 0;
+  grid-column: 1 / -1;
+}
+
+.button {
+  display: inline-block;
+  background: #2563eb;
+  color: #fff;
+  padding: 0.75rem 1.5rem;
+  font-size: 1.125rem;
+  font-weight: 600;
+  border-radius: 8px;
+  text-decoration: none;
+  transition: background 0.2s ease;
+}
+
+.button:hover {
+  background: #1e40af;
+}
+
+/* Footer */
+footer {
+  text-align: center;
+  padding: 2rem 1rem;
+  font-size: 0.875rem;
+  color: #666;
+  border-top: 1px solid #eee;
+}
+
+/* Hero-bild */
+.hero-image img {
+  max-width: 100%;
+  width: 100%;
+  height: auto;
+  border-radius: 12px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.1);
+}
+
+/* Responsivt: stapla på smalare skärmar */
+@media (max-width: 820px) {
+  main {
+    grid-template-columns: 1fr;
+  }
+.cta {
+  text-align: center;
+  margin: 1rem 0;      /* mindre topp‑marginal så knappen syns högre */
+  align-self: start;   /* placera CTA högre i grid‑raden */
+  grid-column: 1 / -1;
+}
+
+}
+</style>
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Extract Data from Graph Image – Free Online Tool</title>
+  <meta name="description" content="Extract data from graph images online. Upload, calibrate axes, digitize points and download CSV. 100% client-side.">
+  <link rel="canonical" href="https://graphdataextractor.com/extract-data-from-graph/">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header>
+    <h1>Extract Data from Graph Images (Free Tool)</h1>
+  </header>
+
+
+<main>
+  <div class="content">
+    <p>Need to convert a chart or plot image into numbers? With <strong>Graph Data Extractor</strong>, you can digitize line charts, scatter plots, and bar charts directly in your browser.</p>
+
+    <!-- Hero-bild -->
+    <div class="hero-image">
+      <img src="/demo-graph.png" alt="Graph Data Extractor extracting data from a line chart">
+    </div>
+
+    <h2>Why use this tool?</h2>
+    <ul>
+      <li>100% client-side: your images never leave your computer.</li>
+      <li>Free to use, no signup required.</li>
+      <li>Supports both linear and log axes.</li>
+    </ul>
+  </div>
+
+  <aside class="sidebar" aria-labelledby="how-title">
+    <h2 id="how-title">How it works</h2>
+    <ol>
+      <li>Upload your graph image (PNG, JPG, or screenshot).</li>
+      <li>Calibrate the axes (linear or logarithmic).</li>
+      <li>Click the points you want to extract.</li>
+      <li>Download your data as CSV.</li>
+    </ol>
+
+    <!-- valfri kort hjälptråd eller CTA-knapp i sidokolumnen -->
+    <p class="subtle">Quick tip: use the zoom tool for small markers and enable pointer preview for precision.</p>
+
+    <!-- CTA flyttad hit så den visas precis under "How it works" -->
+    <div class="cta">
+      <a class="button" href="https://graphdataextractor.com/">👉 Try Graph Data Extractor Now</a>
+    </div>
+  </aside>
+</main>
+
+  <footer>
+    <p>© 2025 Graph Data Extractor</p>
+  </footer>
+</body>
+</html>
