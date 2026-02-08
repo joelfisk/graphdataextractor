@@ -1,0 +1,667 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <link rel="icon" href="favicon.ico" />
+    <script defer src="https://cloud.umami.is/script.js" data-website-id="acb1c734-4341-4b6c-aa4f-1c2f4cc3fad8"></script>
+
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Graph Data Extractor – Free Image‑to‑CSV Tool (v11)</title>
+    <meta
+      name="description"
+      content="Upload a graph image, calibrate axes (linear or logarithmic), extract data points and download as CSV. Free, client‑side tool—no cookies required."
+    />
+
+    <script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "Graph Data Extractor",
+  "url": "http://www.graphdataextractor.com",
+  "description": "Convert any graph image into precise CSV data entirely client‑side without cookies or tracking.",
+  "applicationCategory": "DataVisualization",
+  "operatingSystem": "WebBrowser",
+  "license": "https://opensource.org/licenses/MIT",
+  "version": "11",
+  "author": {
+    "@type": "Person",
+    "name": "Joel GraphDataExtractor",
+    "url": "mailto:info@graphdataextractor.com"
+  },
+  "offers": {
+    "@type": "Offer",
+    "price": "0.00",
+    "priceCurrency": "USD",
+    "url": "http://www.graphdataextractor.com"
+  }
+}
+    </script>
+
+    <style>
+      body { font-family: Arial, sans-serif; margin: 0; display: flex; flex-direction: row; height: 100vh; }
+      .modal { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 1000; }
+      .modal-content { background: #fff; padding: 20px; border-radius: 6px; max-width: 400px; width: 90%; box-shadow: 0 2px 10px rgba(0,0,0,0.3); position: relative; }
+      .modal-close { position: absolute; top: 8px; right: 8px; background: none; border: none; font-size: 1.4em; line-height: 1; cursor: pointer; color: #000; }
+
+      #controls, #tools-box { border: 1px solid #ccc; padding: 8px; margin-bottom: 10px; background: #f9f9f9; border-radius: 4px; width: 240px; }
+      footer#attribution { position: fixed; bottom: 0; left: 0; width: 240px; font-size: 0.8em; text-align: center; padding: 4px; background: #f4f4f4; color: #555; border-top: 1px solid #ccc; box-sizing: border-box; }
+      fieldset { border: 1px solid #ccc; border-radius: 4px; padding: 5px; flex: 1 1 200px; }
+      legend { font-weight: bold; }
+      label { display: block; margin-top: 8px; }
+      input[type=number] { width: 100%; box-sizing: border-box; margin-top: 4px; }
+      button { margin-top: 10px; padding: 6px 12px; border: none; border-radius: 4px; background: #007bff; color: #fff; cursor: pointer; }
+      button:disabled { background: #aaa; cursor: not-allowed; }
+
+      #canvas-container { flex: 1; position: relative; background: #eee; margin: 0; border: 2px solid #ccc; border-radius: 4px; }
+      #canvas { display: block; background: #fff; width: 100%; height: 100%; position: absolute; top: 0; left: 0; }
+
+      table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+      th, td { border: 1px solid #ccc; padding: 4px; text-align: center; }
+      th { background: #ddd; }
+
+      #table-container { width: 240px; background: #fafafa; border-left: 1px solid #ccc; overflow-y: auto; padding: 10px; box-sizing: border-box; }
+      #controls fieldset input[type="file"] { display: block; width: 100%; box-sizing: border-box; }
+      #placePointsToggle.active { background: #28a745; }
+      .subtle { color: #666; font-size: 12px; }
+    </style>
+</head>
+<body>
+  <div id="controls">
+    <fieldset>
+      <legend>1. Upload image</legend>
+      <input type="file" id="upload" accept="image/*" />
+      <div id="error" class="subtle"></div>
+    </fieldset>
+
+    <fieldset>
+      <legend>2. Define Axes</legend>
+      <small>Set x/y limits. Drag red handles to scale axes, blue to move origin.</small>
+      <label for="xMin">xMin</label><input type="number" id="xMin" />
+      <label for="xMax">xMax</label><input type="number" id="xMax" />
+      <label for="yMin">yMin</label><input type="number" id="yMin" />
+      <label for="yMax">yMax</label><input type="number" id="yMax" />
+    </fieldset>
+
+    <fieldset>
+      <legend>Actions</legend>
+      <button id="placePointsToggle">Place points</button>
+      <button id="undo">Undo (Ctrl+Z)</button>
+      <button id="redo">Redo (Ctrl+Y / Shift+Ctrl+Z)</button>
+      <button id="clear">Clear all points</button>
+      <button id="download" data-umami-event="download_csv">Download .CSV</button>
+      <button id="reset" data-umami-event="reset_grapher">Reset Grapher</button>
+      <button id="help" data-umami-event="help">Help</button>
+      <button
+          onclick="location.href='mailto:bugreport@graphdataextractor.com?subject=Bug%20report%20-%20Graph%20Data%20Extractor&body=Briefly%20describe%20the%20issue:%0A1)%20Steps%20to%20reproduce%0A2)%20Expected%20result%0A3)%20Actual%20result%0A%0AOptional:%0A-%20Screenshot%20or%20image%20of%20the%20graph%0A-%20Device/OS/Browser%0A-%20App%20version%0A%0APlease%20do%20not%20include%20sensitive%20information.'">
+          Report a bug 🐞
+      </button>
+    </fieldset>
+
+    <fieldset>
+      <legend>About</legend>
+      <small>© 2025 info@graphdataextractor.com • v11</small>
+    </fieldset>
+
+
+  </div>
+
+
+  <div id="canvas-container">
+    <canvas id="canvas"></canvas>
+    <canvas id="zoomCanvas" width="120" height="120" style="position: absolute; border: 1px solid #888; display: none; pointer-events: none; z-index: 10;"></canvas>
+    <canvas id="pointerZoomCanvas" width="120" height="120" style="position: absolute; border: 1px solid green; display: none; pointer-events: none; z-index: 11;"></canvas>
+  </div>
+
+  <div id="table-container">
+    <div id="tools-box">
+      <strong>Options</strong>
+      <div class="tool-item">
+        <label for="decimalSelect">Number of decimals:</label>
+        <input type="number" id="decimalSelect" min="0" max="10" value="3" style="width: 60px;" />
+      </div>
+      <div class="tool-item">
+        <label><input type="checkbox" id="pointerZoomToggle" /> 🔍 Pointer Zoom</label>
+      </div>
+      <div class="tool-item">
+        <label><input type="checkbox" id="extendedAxes" /> ➕ Extended axes</label>
+      </div>
+      <div class="tool-item">
+        <label><input type="checkbox" id="lockAxes" /> 🔒 Lock axes</label>
+      </div>
+      <div class="tool-item">
+        <label><input type="checkbox" id="lockImage" /> 🔒 Lock image</label>
+      </div>
+      <hr />
+      <div class="tool-item">
+        <strong>Axis scale</strong>
+        <label><input type="checkbox" id="logXToggle" /> Logarithmic X</label>
+        <label><input type="checkbox" id="logYToggle" /> Logarithmic Y</label>
+        <div class="subtle">For log axes, xMin/xMax or yMin/yMax must be &gt; 0.</div>
+      </div>
+    </div>
+    <table>
+      <thead>
+        <tr><th>#</th><th>x</th><th>y</th></tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+
+  <div id="intro-modal" class="modal" style="display: none;">
+    <div class="modal-content">
+      <button class="modal-close" aria-label="Close">&times;</button>
+      <h2>Welcome to Graph Data Extractor</h2>
+      <p>Transform any graph image into clean data:</p>
+      <ul>
+        <li>🔍 Upload your graph</li>
+        <li>📐 Calibrate axes with drag handles</li>
+        <li>🎯 Click to capture data points</li>
+        <li>📈 Choose linear or logarithmic axes</li>
+        <li>💾 Download as CSV</li>
+        <li>🔒 Fully client‑side—no cookies, no tracking</li>
+        <li>v11</li>
+      </ul>
+      <p>Click × to get started!</p>
+    </div>
+  </div>
+
+  <script>
+// ===== Helper: HiDPI‑safe canvas + mouse coords in CSS pixels =====
+function resizeHiDPI(canvas) {
+  const dpr = window.devicePixelRatio || 1;
+  const cssW = canvas.parentElement.clientWidth;
+  const cssH = canvas.parentElement.clientHeight;
+  canvas.style.width = cssW + 'px';
+  canvas.style.height = cssH + 'px';
+  canvas.width = Math.round(cssW * dpr);
+  canvas.height = Math.round(cssH * dpr);
+  const ctx = canvas.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0); // work in CSS pixels
+  return dpr;
+}
+function canvasCSSSize(canvas){
+  return { w: canvas.getBoundingClientRect().width, h: canvas.getBoundingClientRect().height };
+}
+function getMouseCSS(e, canvas){
+  const r = canvas.getBoundingClientRect();
+  return { x: e.clientX - r.left, y: e.clientY - r.top };
+}
+
+// ===== History Manager (Undo/Redo) =====
+class HistoryManager {
+  constructor(cal, img, mgr, limit = 200) {
+    this.cal = cal; this.img = img; this.mgr = mgr; this.limit = limit;
+    this.stack = []; this.redoStack = [];
+  }
+  capture() {
+    const inputs = {
+      xMin: document.getElementById('xMin').value,
+      xMax: document.getElementById('xMax').value,
+      yMin: document.getElementById('yMin').value,
+      yMax: document.getElementById('yMax').value,
+      decimals: document.getElementById('decimalSelect').value,
+      logX: document.getElementById('logXToggle').checked,
+      logY: document.getElementById('logYToggle').checked
+    };
+    return {
+      inputs,
+      cal: {
+        origin: { ...this.cal.origin },
+        xHandle: { ...this.cal.xHandle },
+        yHandle: { ...this.cal.yHandle }
+      },
+      img: {
+        loaded: this.img.loaded,
+        offsetX: this.img.offsetX,
+        offsetY: this.img.offsetY,
+        imgW: this.img.imgW,
+        imgH: this.img.imgH,
+        ratio: this.img.ratio
+      },
+      points: JSON.parse(JSON.stringify(this.mgr.points))
+    };
+  }
+  restore(state) {
+    const { inputs, cal, img, points } = state;
+    document.getElementById('xMin').value = inputs.xMin;
+    document.getElementById('xMax').value = inputs.xMax;
+    document.getElementById('yMin').value = inputs.yMin;
+    document.getElementById('yMax').value = inputs.yMax;
+    document.getElementById('decimalSelect').value = inputs.decimals;
+    document.getElementById('logXToggle').checked = !!inputs.logX;
+    document.getElementById('logYToggle').checked = !!inputs.logY;
+
+    this.cal.origin = { ...cal.origin };
+    this.cal.xHandle = { ...cal.xHandle };
+    this.cal.yHandle = { ...cal.yHandle };
+    this.cal.recalcScale();
+
+    this.img.loaded = img.loaded;
+    this.img.offsetX = img.offsetX;
+    this.img.offsetY = img.offsetY;
+    this.img.imgW = img.imgW;
+    this.img.imgH = img.imgH;
+    this.img.ratio = img.ratio;
+
+    this.mgr.points = JSON.parse(JSON.stringify(points));
+    this.mgr.updateTable();
+  }
+  save(label = '') {
+    const snap = this.capture();
+    this.stack.push(snap);
+    if (this.stack.length > this.limit) this.stack.shift();
+    this.redoStack = [];
+  }
+  canUndo(){ return this.stack.length > 1; }
+  canRedo(){ return this.redoStack.length > 0; }
+  undo(){
+    if (!this.canUndo()) return;
+    const curr = this.stack.pop();
+    this.redoStack.push(curr);
+    this.restore(this.stack[this.stack.length - 1]);
+  }
+  redo(){
+    if (!this.canRedo()) return;
+    const next = this.redoStack.pop();
+    this.stack.push(next);
+    this.restore(next);
+  }
+}
+
+// ===== App bootstrap =====
+window.addEventListener('load', () => {
+  // 1) Prefill inputs
+  document.getElementById('xMin').value = 0;
+  document.getElementById('xMax').value = 10;
+  document.getElementById('yMin').value = 0;
+  document.getElementById('yMax').value = 10;
+  document.getElementById('logXToggle').checked = false;
+  document.getElementById('logYToggle').checked = false;
+
+  // 2) Welcome modal once per session
+  if (!sessionStorage.getItem('welcomeShown')) {
+    const modal = document.getElementById('intro-modal');
+    modal.style.display = 'flex';
+    sessionStorage.setItem('welcomeShown', 'true');
+  }
+
+  // 3) Init canvas + tools
+  const canvas = document.getElementById('canvas');
+  let currentDPR = resizeHiDPI(canvas);
+  const calibrator = new AxisCalibrator(canvas);
+  const imgH       = new ImageHandler(canvas);
+  const manager    = new PointManager(calibrator);
+  calibrator.manager = manager;
+
+  // 4) History
+  const history = new HistoryManager(calibrator, imgH, manager, 200);
+  window.historyManager = history;
+
+  // 5) First scale + table + initial snapshot
+  calibrator.recalcScale();
+  manager.updateTable();
+  history.save('init');
+
+  // 6) Responsiveness (incl zoom DPR changes)
+  window.addEventListener('resize', () => {
+    currentDPR = resizeHiDPI(canvas);
+    calibrator.recalcScale();
+  });
+
+  // 7) Render loop
+  (function render() {
+    imgH.draw();
+    calibrator.drawAxes();
+    manager.drawPoints(imgH.ctx);
+    requestAnimationFrame(render);
+  })();
+
+  // 8) Keyboard shortcuts: Undo/Redo
+  window.addEventListener('keydown', (e) => {
+    const active = document.activeElement;
+    if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.isContentEditable)) return;
+    const mod = e.ctrlKey || e.metaKey; // Ctrl (Win/Linux) or Cmd (Mac)
+    if (!mod) return;
+    const k = e.key.toLowerCase();
+    if (k === 'z') {
+      e.preventDefault();
+      if (e.shiftKey) history.redo(); else history.undo();
+    } else if (k === 'y') {
+      e.preventDefault();
+      history.redo();
+    }
+  });
+});
+
+// Close modal
+document.addEventListener('click', (ev) => {
+  if (ev.target && ev.target.classList.contains('modal-close')) {
+    document.getElementById('intro-modal').style.display = 'none';
+  }
+});
+
+// ===== Image handling =====
+class ImageHandler {
+  constructor(canvas) {
+    this.canvas = canvas;
+    this.ctx = canvas.getContext('2d');
+    this.img = new Image();
+    this.loaded = false;
+    this.offsetX = 0; this.offsetY = 0; this.imgW = 0; this.imgH = 0; this.ratio = 1;
+    this.resizing = false; this.dragging = false; this.dragStart = { x: 0, y: 0 };
+    this.handleSize = 8;
+
+    document.getElementById('upload').addEventListener('change', e => this.load(e));
+    canvas.addEventListener('mousedown', e => this.onMouseDown(e));
+    canvas.addEventListener('mousemove', e => this.onMouseMove(e));
+    canvas.addEventListener('mouseup', () => this.onMouseUp());
+
+    window.imageHandler = this;
+  }
+  load(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    this.img.src = URL.createObjectURL(file);
+    this.img.onload = () => {
+      this.loaded = true;
+      const { w: cw, h: ch } = canvasCSSSize(this.canvas);
+      const iw = this.img.naturalWidth; const ih = this.img.naturalHeight;
+      const targetW = cw * 0.5; const targetH = ch * 0.5;
+      const scale = Math.min(targetW / iw, targetH / ih);
+      this.imgW = iw * scale; this.imgH = ih * scale; this.ratio = this.imgH / this.imgW;
+      this.offsetX = (cw - this.imgW) / 2; this.offsetY = (ch - this.imgH) / 2;
+      const hm = window.historyManager; if (hm) hm.save('image-load');
+    };
+  }
+  onMouseDown(e) {
+    if (document.getElementById('lockImage').checked) return;
+    if (!this.loaded) return;
+    const { x: mx, y: my } = getMouseCSS(e, this.canvas);
+    const rx = this.offsetX + this.imgW; const ry = this.offsetY + this.imgH;
+    if (Math.hypot(mx - rx, my - ry) < this.handleSize * 2) { this.resizing = true; return; }
+    const dragHandleX = this.offsetX; const dragHandleY = this.offsetY + this.imgH;
+    if (Math.hypot(mx - dragHandleX, my - dragHandleY) < this.handleSize * 2) {
+      this.dragging = true; this.dragStart = { x: mx, y: my }; return;
+    }
+  }
+  onMouseMove(e) {
+    const { x, y } = getMouseCSS(e, this.canvas);
+    if (this.resizing) {
+      let newW = x - this.offsetX; if (newW < 20) newW = 20;
+      this.imgW = newW; this.imgH = newW * this.ratio;
+    } else if (this.dragging) {
+      const dx = x - this.dragStart.x; const dy = y - this.dragStart.y;
+      this.offsetX += dx; this.offsetY += dy; this.dragStart = { x, y };
+    }
+  }
+  onMouseUp() {
+    const didChange = this.dragging || this.resizing;
+    if (this.dragging) {
+      const step = 20; this.offsetX = Math.round(this.offsetX / step) * step; this.offsetY = Math.round(this.offsetY / step) * step;
+    }
+    this.resizing = false; this.dragging = false;
+    if (didChange) { const hm = window.historyManager; if (hm) hm.save('image-transform'); }
+  }
+  drawGrid() {
+    const step = 20; const { w, h } = canvasCSSSize(this.canvas);
+    this.ctx.save(); this.ctx.strokeStyle = '#e0e0e0'; this.ctx.lineWidth = 1;
+    for (let x = 0; x <= w; x += step) { this.ctx.beginPath(); this.ctx.moveTo(x, 0); this.ctx.lineTo(x, h); this.ctx.stroke(); }
+    for (let y = 0; y <= h; y += step) { this.ctx.beginPath(); this.ctx.moveTo(0, y); this.ctx.lineTo(w, y); this.ctx.stroke(); }
+    this.ctx.restore();
+  }
+  draw() {
+    const lockedImg = document.getElementById('lockImage').checked;
+    this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    this.drawGrid();
+    if (this.loaded) {
+      this.ctx.drawImage(this.img, this.offsetX, this.offsetY, this.imgW, this.imgH);
+      this.ctx.fillStyle = lockedImg ? '#888' : 'black';
+      this.ctx.fillRect(this.offsetX + this.imgW - this.handleSize, this.offsetY + this.imgH - this.handleSize, this.handleSize * 2, this.handleSize * 2);
+      this.ctx.fillStyle = lockedImg ? '#888' : 'blue';
+      this.ctx.beginPath(); this.ctx.arc(this.offsetX, this.offsetY + this.imgH, this.handleSize, 0, 2 * Math.PI); this.ctx.fill();
+    }
+  }
+}
+
+// ===== Axes =====
+class AxisCalibrator {
+  constructor(canvas) {
+    this.canvas = canvas; this.ctx = canvas.getContext('2d'); this.handleSize = 6; this.initHandles();
+    this.dragX = this.dragY = this.dragO = false; this.scaleX = this.scaleY = null; this.initEvents();
+  }
+  recalcScale() {
+    const xMin = parseFloat(document.getElementById('xMin').value);
+    const xMax = parseFloat(document.getElementById('xMax').value);
+    const yMin = parseFloat(document.getElementById('yMin').value);
+    const yMax = parseFloat(document.getElementById('yMax').value);
+    const logX = document.getElementById('logXToggle').checked;
+    const logY = document.getElementById('logYToggle').checked;
+
+    const errors = [];
+
+    if (!isNaN(xMin) && !isNaN(xMax) && this.xHandle && this.origin) {
+      const px = this.xHandle.x - this.origin.x;
+      if (logX) {
+        if (xMin <= 0 || xMax <= 0 || xMin >= xMax) {
+          this.scaleX = null; errors.push('For log X, require 0 < xMin < xMax');
+        } else {
+          const lnMin = Math.log(xMin), lnMax = Math.log(xMax);
+          this.scaleX = (lnMax - lnMin) / px; // NOTE: scaleX is per natural‑log unit per pixel
+        }
+      } else {
+        if (xMin >= xMax) { this.scaleX = null; errors.push('Require xMin < xMax'); }
+        else { this.scaleX = (xMax - xMin) / px; }
+      }
+    }
+
+    if (!isNaN(yMin) && !isNaN(yMax) && this.yHandle && this.origin) {
+      const py = this.origin.y - this.yHandle.y;
+      if (logY) {
+        if (yMin <= 0 || yMax <= 0 || yMin >= yMax) {
+          this.scaleY = null; errors.push('For log Y, require 0 < yMin < yMax');
+        } else {
+          const lnMin = Math.log(yMin), lnMax = Math.log(yMax);
+          this.scaleY = (lnMax - lnMin) / py; // natural‑log per pixel
+        }
+      } else {
+        if (yMin >= yMax) { this.scaleY = null; errors.push('Require yMin < yMax'); }
+        else { this.scaleY = (yMax - yMin) / py; }
+      }
+    }
+
+    const errBox = document.getElementById('error');
+    errBox.textContent = errors.join(' • ');
+  }
+  initHandles() {
+    const step = 20; const { w: cw, h: ch } = canvasCSSSize(this.canvas); const cx = cw / 2; const cy = ch / 2;
+    this.origin = { x: Math.round(cx / step) * step, y: Math.round(cy / step) * step };
+    const defaultLen = 100;
+    this.xHandle = { x: this.origin.x + defaultLen, y: this.origin.y };
+    this.yHandle = { x: this.origin.x, y: this.origin.y - defaultLen };
+  }
+  resetForCanvas() { this.initHandles(); }
+  initEvents() {
+    this.canvas.addEventListener('mousedown', e => this.startDrag(e));
+    this.canvas.addEventListener('mousemove', e => this.onDrag(e));
+    this.canvas.addEventListener('mouseup', () => this.stopDrag());
+
+    ['xMin','xMax','yMin','yMax'].forEach(id => {
+      document.getElementById(id).addEventListener('input', () => {
+        this.recalcScale(); if (this.manager) this.manager.updateTable();
+      });
+      document.getElementById(id).addEventListener('change', () => {
+        this.recalcScale(); const hm = window.historyManager; if (hm) hm.save('axes-input');
+      });
+    });
+
+    ['logXToggle','logYToggle'].forEach(id => {
+      document.getElementById(id).addEventListener('change', () => {
+        this.recalcScale(); if (this.manager) this.manager.updateTable(); const hm = window.historyManager; if (hm) hm.save('axes-scale-toggle');
+      });
+    });
+
+    document.getElementById('lockAxes').addEventListener('change', e => {
+      const locked = e.target.checked; ['xMin','xMax','yMin','yMax'].forEach(id => { document.getElementById(id).disabled = locked; });
+    });
+
+    this.recalcScale();
+  }
+  setNumeric() {
+    // Kept for backward compatibility; recalcScale() now handles log/linear.
+    this.recalcScale();
+  }
+  startDrag(e) {
+    if (document.getElementById('lockAxes').checked) return;
+    const { x, y } = getMouseCSS(e, this.canvas); const d = this.handleSize * 2;
+    if (Math.hypot(x - this.xHandle.x, y - this.xHandle.y) < d) { this.dragX = true; return; }
+    if (Math.hypot(x - this.yHandle.x, y - this.yHandle.y) < d) { this.dragY = true; return; }
+    if (Math.hypot(x - this.origin.x,  y - this.origin.y)  < d) { this.dragO = true; }
+  }
+  onDrag(e) {
+    const { x, y } = getMouseCSS(e, this.canvas);
+    if (this.dragX || this.dragY || this.dragO) { showZoom(this.canvas, x, y); }
+    if (this.dragX) { this.xHandle.x = x; this.xHandle.y = this.origin.y; this.recalcScale(); }
+    else if (this.dragY) { this.yHandle.x = this.origin.x; this.yHandle.y = y; this.recalcScale(); }
+    else if (this.dragO) {
+      const dx = x - this.origin.x; const dy = y - this.origin.y;
+      this.origin = { x, y }; this.xHandle.x += dx; this.xHandle.y += dy; this.yHandle.x += dx; this.yHandle.y += dy;
+    }
+  }
+  stopDrag() {
+    const wasDragging = this.dragX || this.dragY || this.dragO;
+    this.dragX = this.dragY = this.dragO = false;
+    document.getElementById('zoomCanvas').style.display = 'none';
+    if (this.manager) this.manager.updateTable();
+    if (wasDragging) { const hm = window.historyManager; if (hm) hm.save('axes-drag'); }
+  }
+  drawAxes() {
+    const ctx = this.ctx; const locked = document.getElementById('lockAxes').checked; const { w: cssW, h: cssH } = canvasCSSSize(this.canvas);
+    ctx.save(); ctx.lineWidth = 2; ctx.strokeStyle = 'red';
+    ctx.beginPath(); ctx.moveTo(this.origin.x, this.origin.y); ctx.lineTo(this.xHandle.x, this.xHandle.y); ctx.moveTo(this.origin.x, this.origin.y); ctx.lineTo(this.yHandle.x, this.yHandle.y); ctx.stroke();
+    ctx.beginPath(); ctx.arc(this.xHandle.x, this.xHandle.y, this.handleSize, 0, 2 * Math.PI);
+    if (locked) { ctx.fillStyle = '#888'; ctx.fill(); } else if (this.dragX) { ctx.strokeStyle = 'red'; ctx.stroke(); } else { ctx.fillStyle = 'red'; ctx.fill(); }
+    ctx.beginPath(); ctx.arc(this.yHandle.x, this.yHandle.y, this.handleSize, 0, 2 * Math.PI);
+    if (locked) { ctx.fillStyle = '#888'; ctx.fill(); } else if (this.dragY) { ctx.strokeStyle = 'red'; ctx.stroke(); } else { ctx.fillStyle = 'red'; ctx.fill(); }
+    ctx.beginPath(); ctx.arc(this.origin.x, this.origin.y, this.handleSize, 0, 2 * Math.PI);
+    if (locked) { ctx.fillStyle = '#888'; ctx.fill(); } else if (this.dragO) { ctx.strokeStyle = 'blue'; ctx.stroke(); } else { ctx.fillStyle = 'blue'; ctx.fill(); }
+    ctx.fillStyle = 'black'; ctx.font = '12px Arial'; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+    const xMinStr = document.getElementById('xMin').value; const yMinStr = document.getElementById('yMin').value; const xMaxStr = document.getElementById('xMax').value; const yMaxStr = document.getElementById('yMax').value;
+    ctx.fillText(`o(${xMinStr},${yMinStr})`, this.origin.x + 8, this.origin.y + 8);
+    ctx.fillText(`x(${xMaxStr},${yMinStr})`, this.xHandle.x + 8, this.xHandle.y + 8);
+    ctx.fillText(`y(${xMinStr},${yMaxStr})`, this.yHandle.x + 8, this.yHandle.y + 8);
+    const ext = document.getElementById('extendedAxes').checked;
+    if (ext) {
+      ctx.save(); ctx.setLineDash([5, 5]); ctx.strokeStyle = '#888'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(0, this.origin.y); ctx.lineTo(cssW, this.origin.y); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(this.origin.x, 0); ctx.lineTo(this.origin.x, cssH); ctx.stroke();
+      ctx.restore();
+    }
+    ctx.restore();
+  }
+  toDataCoords(px, py) {
+    if (this.scaleX === null || this.scaleY === null) return null;
+    const dx = px - this.origin.x; const dy = this.origin.y - py;
+    const val = document.getElementById('decimalSelect').value; const decimals = val === '' ? 3 : parseInt(val);
+
+    const xMin = parseFloat(document.getElementById('xMin').value);
+    const xMax = parseFloat(document.getElementById('xMax').value);
+    const yMin = parseFloat(document.getElementById('yMin').value);
+    const yMax = parseFloat(document.getElementById('yMax').value);
+    const logX = document.getElementById('logXToggle').checked;
+    const logY = document.getElementById('logYToggle').checked;
+
+    let xVal, yVal;
+    if (logX) {
+      const lnMin = Math.log(xMin);
+      xVal = Math.exp(lnMin + dx * this.scaleX);
+    } else {
+      xVal = xMin + dx * this.scaleX;
+    }
+    if (logY) {
+      const lnMin = Math.log(yMin);
+      yVal = Math.exp(lnMin + dy * this.scaleY);
+    } else {
+      yVal = yMin + dy * this.scaleY;
+    }
+
+    // toFixed can overflow on very large/small, but is adequate for typical use; could be improved later.
+    return {
+      x: Number.isFinite(xVal) ? xVal.toFixed(decimals) : '',
+      y: Number.isFinite(yVal) ? yVal.toFixed(decimals) : ''
+    };
+  }
+  isDragging() { return this.dragX || this.dragY || this.dragO; }
+}
+
+// ===== Points =====
+class PointManager {
+  constructor(cal) {
+    this.cal = cal; this.canvas = cal.canvas; this.points = []; this.placingEnabled = false; this.init();
+  }
+  init() {
+    const btn = document.getElementById('placePointsToggle');
+    btn.addEventListener('click', () => {
+      this.placingEnabled = !this.placingEnabled; btn.classList.toggle('active', this.placingEnabled);
+      btn.textContent = this.placingEnabled ? 'Place points (ON)' : 'Place points';
+    });
+    this.canvas.addEventListener('mousedown', e => {
+      if (this.placingEnabled && !this.cal.isDragging() && !window.imageHandler.dragging) { this.addPoint(e); }
+    });
+    this.canvas.addEventListener('mousemove', e => {
+      const toggle = document.getElementById('pointerZoomToggle'); const zoomCanvas = document.getElementById('pointerZoomCanvas');
+      const { x, y } = getMouseCSS(e, this.canvas);
+      if (toggle && toggle.checked) { showZoom(this.canvas, x, y, 'pointerZoomCanvas'); } else { if (zoomCanvas) zoomCanvas.style.display = 'none'; }
+    });
+    document.getElementById('undo').addEventListener('click', () => window.historyManager && window.historyManager.undo());
+    document.getElementById('redo').addEventListener('click', () => window.historyManager && window.historyManager.redo());
+    document.getElementById('clear').addEventListener('click', () => { this.clear(); const hm = window.historyManager; if (hm) hm.save('clear-points'); });
+    document.getElementById('download').addEventListener('click', () => this.download());
+    document.getElementById('decimalSelect').addEventListener('input', () => this.updateTable());
+  }
+  addPoint(e) {
+    const imgH = window.imageHandler; if (this.cal.isDragging() || (imgH && (imgH.dragging || imgH.resizing))) return;
+    if (this.cal.scaleX === null || this.cal.scaleY === null) return;
+    const { x, y } = getMouseCSS(e, this.canvas); const d = this.cal.toDataCoords(x, y);
+    this.points.push({ x: d.x, y: d.y, cx: x, cy: y }); this.updateTable();
+    const hm = window.historyManager; if (hm) hm.save('add-point');
+  }
+  undoPointOnly() { this.points.pop(); this.updateTable(); }
+  clear() { this.points = []; this.updateTable(); }
+  updateTable() {
+    const tbody = document.querySelector('#table-container tbody'); tbody.innerHTML = '';
+    this.points.forEach((p, i) => {
+      const d = this.cal.toDataCoords(p.cx, p.cy); const row = document.createElement('tr');
+      row.innerHTML = `<td>${i + 1}</td><td>${d ? d.x : ''}</td><td>${d ? d.y : ''}</td>`; tbody.appendChild(row);
+    });
+  }
+  drawPoints(ctx) {
+    ctx.save(); ctx.strokeStyle = 'green'; ctx.lineWidth = 2;
+    this.points.forEach(p => { const s = 6; ctx.beginPath(); ctx.moveTo(p.cx - s, p.cy - s); ctx.lineTo(p.cx + s, p.cy + s); ctx.moveTo(p.cx + s, p.cy - s); ctx.lineTo(p.cx - s, p.cy + s); ctx.stroke(); });
+    ctx.restore();
+  }
+  download() {
+    let csv = 'x,y\n';
+    csv += this.points.map(p => { const d = this.cal.toDataCoords(p.cx, p.cy); return `${d.x},${d.y}`; }).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'graphdataextractor.csv'; a.click();
+  }
+}
+
+// Reset & Help
+document.getElementById('reset').addEventListener('click', (e) => { e.preventDefault(); if (confirm('Are you sure you want to reset the grapher?')) { location.reload(); } });
+document.getElementById('help').addEventListener('click', () => { const modal = document.getElementById('intro-modal'); modal.style.display = 'flex'; document.body.style.overflow = 'hidden'; });
+document.querySelector('.modal-close').addEventListener('click', () => { document.getElementById('intro-modal').style.display = 'none'; document.body.style.overflow = ''; });
+
+// ===== Zoom loupe (HiDPI) =====
+function showZoom(canvas, x, y, canvasId = 'zoomCanvas') {
+  const zoomCanvas = document.getElementById(canvasId); const zoomCtx = zoomCanvas.getContext('2d'); const dpr = window.devicePixelRatio || 1;
+  const size = 20; // CSS pixels
+  zoomCanvas.style.left = (x + 20) + 'px'; zoomCanvas.style.top = (y + 20) + 'px'; zoomCanvas.style.display = 'block';
+  const sx = Math.max(0, (x - size / 2) * dpr); const sy = Math.max(0, (y - size / 2) * dpr);
+  zoomCtx.imageSmoothingEnabled = false; zoomCtx.clearRect(0, 0, zoomCanvas.width, zoomCanvas.height);
+  zoomCtx.drawImage(canvas, sx, sy, size * dpr, size * dpr, 0, 0, zoomCanvas.width, zoomCanvas.height);
+  zoomCtx.strokeStyle = 'red'; zoomCtx.beginPath(); zoomCtx.moveTo(zoomCanvas.width / 2, 0); zoomCtx.lineTo(zoomCanvas.width / 2, zoomCanvas.height); zoomCtx.moveTo(0, zoomCanvas.height / 2); zoomCtx.lineTo(zoomCanvas.width, zoomCanvas.height / 2); zoomCtx.stroke();
+  zoomCtx.save(); zoomCtx.globalAlpha = 0.5; zoomCtx.fillStyle = 'blue'; zoomCtx.beginPath(); zoomCtx.arc(zoomCanvas.width / 2, zoomCanvas.height / 2, 6, 0, 2 * Math.PI); zoomCtx.fill(); zoomCtx.restore();
+}
+  </script>
+</body>
+</html>
