@@ -24,7 +24,7 @@
   "applicationCategory": "DataVisualization",
   "operatingSystem": "WebBrowser",
   "license": "https://opensource.org/licenses/MIT",
-  "version": "16",
+  "version": "16.1",
   "author": {
     "@type": "Person",
     "name": "Joel E"
@@ -132,7 +132,7 @@
 
     <fieldset>
       <legend>About</legend>
-      <small>© 2026 info@graphdataextractor.com • v16</small>
+      <small>© 2026 info@graphdataextractor.com • v16.1</small>
       <div id="autosaveStatus" class="subtle"></div>
     </fieldset>
 
@@ -197,7 +197,7 @@
         <li>📈 Choose linear or logarithmic axes</li>
         <li>💾 Download as CSV</li>
         <li>🔒 Fully client‑side—no cookies, no tracking</li>
-        <li>v16</li>
+        <li>v16.1</li>
       </ul>
 
       <!-- Tutorial link to YouTube -->
@@ -1043,9 +1043,41 @@ class AxisCalibrator {
     ctx.fillText(`y(${xMinStr},${yMaxStr})`, this.yHandle.x + 8, this.yHandle.y + 8);
     const ext = document.getElementById('extendedAxes').checked;
     if (ext) {
+      const lineEndpoints = (dx, dy) => {
+        const eps = 1e-9;
+        const pts = [];
+        const addIfInside = (x, y, t) => {
+          if (x >= -eps && x <= cssW + eps && y >= -eps && y <= cssH + eps) {
+            pts.push({ x: Math.max(0, Math.min(cssW, x)), y: Math.max(0, Math.min(cssH, y)), t });
+          }
+        };
+        if (Math.abs(dx) > eps) {
+          let t = (0 - this.origin.x) / dx;
+          addIfInside(0, this.origin.y + t * dy, t);
+          t = (cssW - this.origin.x) / dx;
+          addIfInside(cssW, this.origin.y + t * dy, t);
+        }
+        if (Math.abs(dy) > eps) {
+          let t = (0 - this.origin.y) / dy;
+          addIfInside(this.origin.x + t * dx, 0, t);
+          t = (cssH - this.origin.y) / dy;
+          addIfInside(this.origin.x + t * dx, cssH, t);
+        }
+        if (pts.length < 2) return null;
+        pts.sort((a, b) => a.t - b.t);
+        return { a: pts[0], b: pts[pts.length - 1] };
+      };
+      const xDir = { x: this.xHandle.x - this.origin.x, y: this.xHandle.y - this.origin.y };
+      const yDir = { x: this.yHandle.x - this.origin.x, y: this.yHandle.y - this.origin.y };
+      const xLine = lineEndpoints(xDir.x, xDir.y);
+      const yLine = lineEndpoints(yDir.x, yDir.y);
       ctx.save(); ctx.setLineDash([5, 5]); ctx.strokeStyle = '#888'; ctx.lineWidth = 1;
-      ctx.beginPath(); ctx.moveTo(0, this.origin.y); ctx.lineTo(cssW, this.origin.y); ctx.stroke();
-      ctx.beginPath(); ctx.moveTo(this.origin.x, 0); ctx.lineTo(this.origin.x, cssH); ctx.stroke();
+      if (xLine) {
+        ctx.beginPath(); ctx.moveTo(xLine.a.x, xLine.a.y); ctx.lineTo(xLine.b.x, xLine.b.y); ctx.stroke();
+      }
+      if (yLine) {
+        ctx.beginPath(); ctx.moveTo(yLine.a.x, yLine.a.y); ctx.lineTo(yLine.b.x, yLine.b.y); ctx.stroke();
+      }
       ctx.restore();
     }
     ctx.restore();
