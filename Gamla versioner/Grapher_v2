@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Graf Data Extraktor v17</title>
+  <style>
+    body {
+  font-family: Arial, sans-serif;
+  margin: 0;
+  display: flex;
+  flex-direction: row; /* liggande layout */
+  height: 100vh;
+}
+
+   #controls {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 10px;
+  background: #f4f4f4;
+  width: 240px;
+  box-sizing: border-box;
+  overflow-y: auto;
+}
+
+    fieldset { border: 1px solid #ccc; border-radius: 4px; padding: 10px; flex: 1 1 200px; }
+    legend { font-weight: bold; }
+    label { display: block; margin-top: 8px; }
+    input[type=number] { width: 100%; box-sizing: border-box; margin-top: 4px; }
+    button { margin-top: 10px; padding: 6px 12px; border: none; border-radius: 4px; background: #007bff; color: #fff; cursor: pointer; }
+    button:disabled { background: #aaa; cursor: not-allowed; }
+    #canvas-container {
+  flex: 1;
+  position: relative;
+  background: #eee;
+  margin: 0;
+}
+
+    #canvas {
+  display: block;
+  background: #fff;
+  width: 100%;
+  height: 100%;
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+    th, td { border: 1px solid #ccc; padding: 4px; text-align: center; }
+    th { background: #ddd; }
+
+    #table-container {
+  width: 240px;
+  background: #fafafa;
+  border-left: 1px solid #ccc;
+  overflow-y: auto;
+  padding: 10px;
+  box-sizing: border-box;
+}
+
+
+  </style>
+</head>
+<body>
+  <div id="controls">
+    <fieldset>
+      <legend>1. Ladda bild</legend>
+      <input type="file" id="upload" accept="image/*" />
+      <div id="error"></div>
+      <button id="reset">Ny fil</button>
+    </fieldset>
+    <fieldset>
+      <legend>2. Ange axlar</legend>
+      <label for="xMin">xMin</label><input type="number" id="xMin" />
+      <label for="xMax">xMax</label><input type="number" id="xMax" />
+      <label for="yMin">yMin</label><input type="number" id="yMin" />
+      <label for="yMax">yMax</label><input type="number" id="yMax" />
+      <button id="calibrate">Kalibrera</button>
+      <small>Efter kalibrering: placera ut punkter på arbetsytan</small>
+    </fieldset>
+    <fieldset>
+      <legend>3. Punkter</legend>
+      <button id="undo" disabled>Ångra senaste punkt</button>
+      <button id="clear">Rensa alla punkter</button>
+      <button id="download" disabled>Ladda ner CSV</button>
+    </fieldset>
+  </div>
+
+  <div id="canvas-container">
+    <canvas id="canvas"></canvas>
+    <canvas id="zoomCanvas"
+        width="120"
+        height="120"
+        style="position: absolute; border: 1px solid #888; display: none; pointer-events: none; z-index: 10;">
+</canvas>
+
+
+  </div>
+<div id="table-container">
+  <label for="decimalSelect">Antal decimaler:</label>
+  <input type="number" id="decimalSelect" min="0" max="10" value="3" style="width: 60px; margin-bottom: 8px;">
+  <table>
+    <thead>
+      <tr><th>#</th><th>x</th><th>y</th></tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+</div>
+
+
+
+  <script>
+    class ImageHandler {
+      constructor(canvas) {
+        this.canvas = canvas;
+        this.ctx = canvas.getContext('2d');
+        this.img = new Image();
+        this.loaded = false;
+        this.offsetX = 0;
+        this.offsetY = 0;
+        this.imgW = 0;
+        this.imgH = 0;
+        this.resizing = false;
+        this.dragging = false;
+        this.dragStart = { x: 0, y: 0 };
+        this.handleSize = 8;
+        this.ratio = 1;
+
+        document.getElementById('upload').addEventListener('change', e => this.load(e));
+        canvas.addEventListener('mousedown', e => this.onMouseDown(e));
+        canvas.addEventListener('mousemove', e => this.onMouseMove(e));
+        canvas.addEventListener('mouseup', () => this.onMouseUp());
+
+        window.imageHandler = this;
+      }
+
+      load(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+        this.img.src = URL.createObjectURL(file);
+        this.img.onload = () => {
+          this.loaded = true;
+          this.imgW = this.img.width;
+          this.imgH = this.img.height;
+          this.ratio = this.imgH / this.imgW;
+          this.offsetX = (this.canvas.width - this.imgW) / 2;
+          this.offsetY = (this.canvas.height - this.imgH) / 2;
+          document.getElementById('error').textContent = '';
+        };
+      }
+
+      onMouseDown(e) {
+  if (!this.loaded) return;
+
+  const mx = e.offsetX;
+  const my = e.offsetY;
+
+  // 1. Kolla om man klickar på resize-hörnet (svart hörn)
+  const rx = this.offsetX + this.imgW;
+  const ry = this.offsetY + this.imgH;
+  if (Math.hypot(mx - rx, my - ry) < this.handleSize * 2) {
+    this.resizing = true;
+    return;
+  }
+
+  // 2. Kolla om man klickar på flytt-handtaget (blå boll i nedre vänster)
+  const dragHandleX = this.offsetX;
+  const dragHandleY = this.offsetY + this.imgH;
+  if (Math.hypot(mx - dragHandleX, my - dragHandleY) < this.handleSize * 2) {
+    this.dragging = true;
+    this.dragStart = { x: mx, y: my };
+    return;
+  }
+}
+
+
+      onMouseMove(e) {
+        if (this.resizing) {
+          let newW = e.offsetX - this.offsetX;
+          if (newW < 20) newW = 20;
+          this.imgW = newW;
+          this.imgH = newW * this.ratio;
+        } else if (this.dragging) {
+          const dx = e.offsetX - this.dragStart.x;
+          const dy = e.offsetY - this.dragStart.y;
+          this.offsetX += dx;
+          this.offsetY += dy;
+          this.dragStart = { x: e.offsetX, y: e.offsetY };
+        }
+      }
+
+      onMouseUp() {
+  if (this.dragging) {
+    // Snappa till rutnät (20px)
+    const step = 20;
+    this.offsetX = Math.round(this.offsetX / step) * step;
+    this.offsetY = Math.round(this.offsetY / step) * step;
+  }
+
+  this.resizing = false;
+  this.dragging = false;
+}
+
+
+      drawGrid() {
+        const step = 20;
+        this.ctx.save();
+        this.ctx.strokeStyle = '#e0e0e0';
+        this.ctx.lineWidth = 1;
+        for (let x = 0; x <= this.canvas.width; x += step) {
+          this.ctx.beginPath();
+          this.ctx.moveTo(x, 0);
+          this.ctx.lineTo(x, this.canvas.height);
+          this.ctx.stroke();
+        }
+        for (let y = 0; y <= this.canvas.height; y += step) {
+          this.ctx.beginPath();
+          this.ctx.moveTo(0, y);
+          this.ctx.lineTo(this.canvas.width, y);
+          this.ctx.stroke();
+        }
+        this.ctx.restore();
+      }
+
+      draw() {
+  this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+  this.drawGrid();
+  if (this.loaded) {
+    this.ctx.drawImage(this.img, this.offsetX, this.offsetY, this.imgW, this.imgH);
+
+    // Rita resize-handtag (svart ruta)
+    this.ctx.fillStyle = 'black';
+    this.ctx.fillRect(
+      this.offsetX + this.imgW - this.handleSize,
+      this.offsetY + this.imgH - this.handleSize,
+      this.handleSize * 2,
+      this.handleSize * 2
+    );
+
+    // Rita blå flyttboll i nedre vänstra hörnet
+    this.ctx.fillStyle = 'blue';
+    this.ctx.beginPath();
+    this.ctx.arc(this.offsetX, this.offsetY + this.imgH, this.handleSize, 0, 2 * Math.PI);
+    this.ctx.fill();
+  }
+}
+    }
+
+    class AxisCalibrator {
+      constructor(canvas) {
+        this.canvas = canvas;
+        this.ctx = canvas.getContext('2d');
+        this.handleSize = 6;
+        this.initHandles();
+        this.dragX = this.dragY = this.dragO = false;
+        this.scaleX = this.scaleY = null;
+        this.initEvents();
+      }
+
+      initHandles() {
+        this.origin = { x: this.canvas.width / 2, y: this.canvas.height / 2 };
+        this.xHandle = { x: this.origin.x + 100, y: this.origin.y };
+        this.yHandle = { x: this.origin.x, y: this.origin.y - 100 };
+      }
+
+      resetForCanvas() {
+        this.initHandles();
+      }
+
+      initEvents() {
+        document.getElementById('calibrate').addEventListener('click', () => this.setNumeric());
+        this.canvas.addEventListener('mousedown', e => this.startDrag(e));
+        this.canvas.addEventListener('mousemove', e => this.onDrag(e));
+        this.canvas.addEventListener('mouseup', () => this.stopDrag());
+      }
+
+      setNumeric() {
+        const xMin = parseFloat(document.getElementById('xMin').value);
+        const xMax = parseFloat(document.getElementById('xMax').value);
+        const yMin = parseFloat(document.getElementById('yMin').value);
+        const yMax = parseFloat(document.getElementById('yMax').value);
+        if (xMin >= xMax || yMin >= yMax) {
+          document.getElementById('error').textContent = 'Fel: xMin < xMax & yMin < yMax';
+          return;
+        }
+        document.getElementById('error').textContent = '';
+        const px = this.xHandle.x - this.origin.x;
+        const py = this.origin.y - this.yHandle.y;
+        this.scaleX = (xMax - xMin) / px;
+        this.scaleY = (yMax - yMin) / py;
+        document.getElementById('download').disabled = false;
+      }
+
+      startDrag(e) {
+        console.log("startDrag körs!", e.offsetX, e.offsetY);
+        const d = this.handleSize * 2;
+        if (Math.hypot(e.offsetX - this.xHandle.x, e.offsetY - this.xHandle.y) < d) { this.dragX = true; return; }
+        if (Math.hypot(e.offsetX - this.yHandle.x, e.offsetY - this.yHandle.y) < d) { this.dragY = true; return; }
+        if (Math.hypot(e.offsetX - this.origin.x, e.offsetY - this.origin.y) < d) { this.dragO = true; }
+      }
+
+      onDrag(e) {
+  if (this.dragX || this.dragY || this.dragO) {
+    showZoom(this.canvas, e.offsetX, e.offsetY);
+  }
+
+  if (this.dragX) {
+    this.xHandle.x = e.offsetX;
+    this.xHandle.y = this.origin.y;
+  } else if (this.dragY) {
+    this.yHandle.x = this.origin.x;
+    this.yHandle.y = e.offsetY;
+  } else if (this.dragO) {
+    const dx = e.offsetX - this.origin.x;
+    const dy = e.offsetY - this.origin.y;
+    this.origin = { x: e.offsetX, y: e.offsetY };
+    this.xHandle.x += dx;
+    this.xHandle.y += dy;
+    this.yHandle.x += dx;
+    this.yHandle.y += dy;
+  }
+}
+
+
+
+      stopDrag() {
+        this.dragX = this.dragY = this.dragO = false;
+        document.getElementById('zoomCanvas').style.display = 'none';
+
+      }
+
+drawAxes() {
+  const ctx = this.ctx;
+  ctx.save();
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = 'red';
+  
+  // Rita axlar
+  ctx.beginPath();
+  ctx.moveTo(this.origin.x, this.origin.y);
+  ctx.lineTo(this.xHandle.x, this.xHandle.y);
+  ctx.moveTo(this.origin.x, this.origin.y);
+  ctx.lineTo(this.yHandle.x, this.yHandle.y);
+  ctx.stroke();
+
+  // Rita handtag som cirklar
+  ctx.fillStyle = 'red';
+  ctx.beginPath();
+  ctx.arc(this.xHandle.x, this.xHandle.y, this.handleSize, 0, 2 * Math.PI);
+  ctx.fill();
+
+  ctx.beginPath();
+  ctx.arc(this.yHandle.x, this.yHandle.y, this.handleSize, 0, 2 * Math.PI);
+  ctx.fill();
+
+  ctx.fillStyle = 'blue';
+  ctx.beginPath();
+  ctx.arc(this.origin.x, this.origin.y, this.handleSize, 0, 2 * Math.PI);
+  ctx.fill();
+
+  // Lägg till etiketter
+  ctx.fillStyle = 'black';
+  ctx.font = '12px Arial';
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'top';
+  ctx.fillText('x', this.xHandle.x + 8, this.xHandle.y + 8);
+  ctx.fillText('y', this.yHandle.x + 8, this.yHandle.y + 8);
+  ctx.fillText('O', this.origin.x + 8, this.origin.y + 8);
+
+  ctx.restore();
+}
+
+
+
+      toDataCoords(px, py) {
+  if (this.scaleX === null || this.scaleY === null) return null;
+  const dx = px - this.origin.x;
+  const dy = this.origin.y - py;
+  const val = document.getElementById('decimalSelect').value;
+  const decimals = val === '' ? 3 : parseInt(val);
+
+  return {
+    x: (parseFloat(document.getElementById('xMin').value) + dx * this.scaleX).toFixed(decimals),
+    y: (parseFloat(document.getElementById('yMin').value) + dy * this.scaleY).toFixed(decimals)
+  };
+}
+
+
+
+      isDragging() {
+        return this.dragX || this.dragY || this.dragO;
+      }
+    }
+
+    class PointManager {
+      constructor(cal) {
+        this.cal = cal;
+        this.canvas = cal.canvas;
+        this.points = [];
+        this.init();
+      }
+
+      init() {
+        this.canvas.addEventListener('mousedown', e => {
+          if (!this.cal.isDragging() && !window.imageHandler.dragging) {
+            this.addPoint(e);
+          }
+        });
+
+        document.getElementById('undo').addEventListener('click', () => this.undo());
+        document.getElementById('clear').addEventListener('click', () => this.clear());
+        document.getElementById('download').addEventListener('click', () => this.download());
+        document.getElementById('decimalSelect').addEventListener('input', () => this.updateTable());
+
+      }
+
+      addPoint(e) {
+  if (this.cal.isDragging() || (window.imageHandler && window.imageHandler.dragging)) return;
+
+  if (this.cal.scaleX === null || this.cal.scaleY === null) {
+    // Inget alert, bara ignorera klicket
+    return;
+  }
+
+  const rect = this.canvas.getBoundingClientRect();
+  const scaleX = this.canvas.width / rect.width;
+  const scaleY = this.canvas.height / rect.height;
+  const px = (e.clientX - rect.left) * scaleX;
+  const py = (e.clientY - rect.top) * scaleY;
+  const d = this.cal.toDataCoords(px, py);
+
+  this.points.push({ x: d.x, y: d.y, px, py });
+  this.updateTable();
+}
+
+
+      undo() {
+        this.points.pop();
+        this.updateTable();
+      }
+
+      clear() {
+        this.points = [];
+        this.updateTable();
+      }
+
+      updateTable() {
+  document.getElementById('undo').disabled = this.points.length === 0;
+  const tbody = document.querySelector('#table-container tbody');
+  tbody.innerHTML = '';
+  this.points.forEach((p, i) => {
+    const row = document.createElement('tr');
+    row.innerHTML = `<td>${i + 1}</td><td>${p.x}</td><td>${p.y}</td>`;
+    tbody.appendChild(row);
+  });
+}
+
+
+      drawPoints(ctx) {
+        ctx.save();
+        ctx.strokeStyle = 'green';
+        ctx.lineWidth = 2;
+        this.points.forEach(p => {
+          const s = 6;
+          ctx.beginPath();
+          ctx.moveTo(p.px - s, p.py - s);
+          ctx.lineTo(p.px + s, p.py + s);
+          ctx.moveTo(p.px + s, p.py - s);
+          ctx.lineTo(p.px - s, p.py + s);
+          ctx.stroke();
+        });
+        ctx.restore();
+      }
+
+      download() {
+        const csv = 'x,y\n' + this.points.map(p => `${p.x},${p.y}`).join('\n');
+        const blob = new Blob([csv], { type: 'text/csv' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'data.csv';
+        a.click();
+      }
+    }
+    document.getElementById('reset').addEventListener('click', () => {
+  location.reload();
+});
+
+    // Initiering
+// Funktion för zoomförstoring
+function showZoom(canvas, x, y) {
+  const zoomCanvas = document.getElementById('zoomCanvas');
+  const zoomCtx = zoomCanvas.getContext('2d');
+  const ctx = canvas.getContext('2d');
+
+  const size = 20;
+  const scale = 6;
+
+  zoomCanvas.style.left = (x + 20) + 'px';
+  zoomCanvas.style.top = (y + 20) + 'px';
+  zoomCanvas.style.display = 'block';
+
+  const sx = Math.max(0, x - size / 2);
+  const sy = Math.max(0, y - size / 2);
+  zoomCtx.imageSmoothingEnabled = false;
+  zoomCtx.clearRect(0, 0, zoomCanvas.width, zoomCanvas.height);
+  zoomCtx.drawImage(canvas, sx, sy, size, size, 0, 0, zoomCanvas.width, zoomCanvas.height);
+
+  zoomCtx.strokeStyle = 'red';
+  zoomCtx.beginPath();
+  zoomCtx.moveTo(zoomCanvas.width / 2, 0);
+  zoomCtx.lineTo(zoomCanvas.width / 2, zoomCanvas.height);
+  zoomCtx.moveTo(0, zoomCanvas.height / 2);
+  zoomCtx.lineTo(zoomCanvas.width, zoomCanvas.height / 2);
+  zoomCtx.stroke();
+
+  // Rita transparent cirkel i mitten av zoomrutan (visar handtagets position)
+zoomCtx.save();
+zoomCtx.globalAlpha = 0.5;
+zoomCtx.fillStyle = 'blue'; // eller 'red' beroende på vilket handtag
+zoomCtx.beginPath();
+zoomCtx.arc(zoomCanvas.width / 2, zoomCanvas.height / 2, 6, 0, 2 * Math.PI);
+zoomCtx.fill();
+zoomCtx.restore();
+
+}
+
+
+    (function() {
+      const canvas = document.getElementById('canvas');
+      canvas.width = canvas.parentElement.clientWidth;
+      canvas.height = canvas.parentElement.clientHeight;
+
+      const calibrator = new AxisCalibrator(canvas);
+      const imgH = new ImageHandler(canvas);
+      const manager = new PointManager(calibrator);
+
+      window.addEventListener('resize', () => {
+        canvas.width = canvas.parentElement.clientWidth;
+        canvas.height = canvas.parentElement.clientHeight;
+        calibrator.resetForCanvas();
+      });
+
+      function render() {
+  imgH.draw();                   // Rita bilden först
+  calibrator.drawAxes();        // Rita koordinatsystem och handtag ovanpå
+  manager.drawPoints(imgH.ctx); // Rita punkter sist
+  requestAnimationFrame(render);
+}
+
+
+      render();
+    })();
+  </script>
+</body>
+</html>

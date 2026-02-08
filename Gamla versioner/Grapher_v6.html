@@ -1,0 +1,915 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script defer src="https://cloud.umami.is/script.js" data-website-id="acb1c734-4341-4b6c-aa4f-1c2f4cc3fad8"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Graph Data Extractor – Free Image‑to‑CSV Tool (No Cookies)</title>
+<meta name="description"
+      content="Upload a graph image, calibrate axes, extract data points and download as CSV. Free, client‑side tool—no cookies required.">
+
+  <style>
+    body {
+  font-family: Arial, sans-serif;
+  margin: 0;
+  display: flex;
+  flex-direction: row; /* liggande layout */
+  height: 100vh;
+}
+
+/* Overlay och modal‑ruta */
+.modal {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal-content {
+  background: #fff;
+  padding: 20px;
+  border-radius: 6px;
+  max-width: 400px;
+  width: 90%;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+  position: relative;
+}
+
+.modal-close {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: none;
+  border: none;
+  font-size: 1.4em;
+  line-height: 1;
+  cursor: pointer;
+  color: #000;          /* Se till att färgen inte är samma som bakgrund */
+}
+
+
+   #controls {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 10px;
+  background: #f4f4f4;
+  width: 240px;
+  box-sizing: border-box;
+  overflow-y: auto;
+}
+
+    /*  Här bryter vi flex-regeln för första fieldset (Upload image) */
+    #controls fieldset:first-of-type {
+      flex: 0 0 auto;   /* ingen flex-grow eller flex-basis — blir så högt som innehållet */
+      /* Om du vill kan du istället sätta t.ex. height: 80px; */
+    }
+
+#tools-box {
+  border: 1px solid #ccc;
+  padding: 8px;
+  margin-bottom: 10px;
+  background: #f9f9f9;
+  border-radius: 4px;
+}
+
+.tool-item {
+  margin-top: 6px;
+}
+
+footer#attribution {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  width: 240px;
+  font-size: 0.8em;
+  text-align: center;
+  padding: 4px;
+  background: #f4f4f4;
+  color: #555;
+  border-top: 1px solid #ccc;
+  box-sizing: border-box;
+}
+
+
+    fieldset { border: 1px solid #ccc; border-radius: 4px; padding: 10px; flex: 1 1 200px; }
+    legend { font-weight: bold; }
+    label { display: block; margin-top: 8px; }
+    input[type=number] { width: 100%; box-sizing: border-box; margin-top: 4px; }
+    button { margin-top: 10px; padding: 6px 12px; border: none; border-radius: 4px; background: #007bff; color: #fff; cursor: pointer; }
+    button:disabled { background: #aaa; cursor: not-allowed; }
+    #canvas-container {
+  flex: 1;
+  position: relative;
+  background: #eee;
+  margin: 0;
+}
+
+    #canvas {
+  display: block;
+  background: #fff;
+  width: 100%;
+  height: 100%;
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+    th, td { border: 1px solid #ccc; padding: 4px; text-align: center; }
+    th { background: #ddd; }
+
+    #table-container {
+  width: 240px;
+  background: #fafafa;
+  border-left: 1px solid #ccc;
+  overflow-y: auto;
+  padding: 10px;
+  box-sizing: border-box;
+}
+
+
+  </style>
+</head>
+<body>
+  <div id="controls">
+    <fieldset>
+      <legend>1. Upload image</legend>
+      <input type="file" id="upload" accept="image/*" />
+      <div id="error"></div>
+    </fieldset>
+    <fieldset>
+  <legend>2. Define Axes</legend>
+  <small>Set x/y limits. Drag red handles to scale axes, blue to move origin.</small>
+  <label for="xMin">xMin</label><input type="number" id="xMin" />
+  <label for="xMax">xMax</label><input type="number" id="xMax" />
+  <label for="yMin">yMin</label><input type="number" id="yMin" />
+  <label for="yMax">yMax</label><input type="number" id="yMax" />
+</fieldset>
+
+    <fieldset>
+      <legend>Actions</legend>
+      <button id="undo" disabled>Remove most recent point</button>
+      <button id="clear">Clear all points</button>
+      <button id="download">Download .CSV</button>
+      <button id="reset">Reset Grapher</button>
+      <button id="help">Help</button>
+    </fieldset>
+  </div>
+
+  <div id="canvas-container">
+    <canvas id="canvas"></canvas>
+    <canvas id="zoomCanvas"
+        width="120"
+        height="120"
+        style="position: absolute; border: 1px solid #888; display: none; pointer-events: none; z-index: 10;">
+</canvas>
+<canvas id="pointerZoomCanvas"
+    width="120"
+    height="120"
+    style="position: absolute; border: 1px solid green; display: none; pointer-events: none; z-index: 11;">
+</canvas>
+
+</div>
+
+  <div id="table-container">
+  <div id="tools-box">
+    <strong>Options</strong>
+    <div class="tool-item">
+      <label for="decimalSelect">Number of decimals:</label>
+      <input type="number" id="decimalSelect" min="0" max="10" value="3" style="width: 60px;">
+    </div>
+    <div class="tool-item">
+  <label>
+    <input type="checkbox" id="pointerZoomToggle">
+    🔍 Pointer Zoom
+  </label>
+  <div class="tool-item">
+  <label>
+    <input type="checkbox" id="extendedAxes">
+     ➕ Extended axes
+  </label>
+</div>
+
+<div class="tool-item">
+  <label>
+    <input type="checkbox" id="lockAxes">
+     🔒 Lock axes
+  </label>
+</div>
+
+<div class="tool-item">
+  <label>
+    <input type="checkbox" id="lockImage">
+     🔒 Lock image
+  </label>
+</div>
+
+  </div>
+  <table>
+    <thead>
+      <tr><th>#</th><th>x</th><th>y</th></tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+</div>
+
+  <footer id="attribution">
+    <p>© 2025 Joel.elinder95@gmail.com All rights reserved.</p>
+  </footer>
+
+
+
+<div id="intro-modal" class="modal" style="display: none;">
+  <div class="modal-content">
+    <button class="modal-close" aria-label="Close">&times;</button>
+    <h2>Welcome to Graph Data Extractor</h2>
+<p>Transform any graph image into clean data:</p>
+<ul>
+  <li>🔍 Upload your graph in seconds</li>
+  <li>📐 Precisely calibrate axes with drag handles</li>
+  <li>🎯 Click to capture data points</li>
+  <li>💾 Download instantly as CSV</li>
+  <li>🔒 Fully client‑side—no cookies, no tracking</li>
+</ul>
+<p>Click × to get started!</p>
+
+
+
+  <script>
+
+// NYTT: Visa bara om vi inte redan visat välkomst‑modalen i den här sessionen
+window.addEventListener('load', () => {
+  // 1) Förifyll input‑fälten
+  document.getElementById('xMin').value = 0;
+  document.getElementById('xMax').value = 10;
+  document.getElementById('yMin').value = 0;
+  document.getElementById('yMax').value = 10;
+
+  // 2) Visa välkomst‑modal om det är första besöket
+  if (!sessionStorage.getItem('welcomeShown')) {
+    const modal = document.getElementById('intro-modal');
+    modal.style.display = 'flex';
+    sessionStorage.setItem('welcomeShown', 'true');
+  }
+
+  // 3) Initiera din canvas och verktyg
+  const canvas = document.getElementById('canvas');
+  // Sätt canvas‑storlek utifrån behållaren
+  canvas.width  = canvas.parentElement.clientWidth;
+  canvas.height = canvas.parentElement.clientHeight;
+
+  const calibrator = new AxisCalibrator(canvas);
+  const imgH       = new ImageHandler(canvas);
+  const manager    = new PointManager(calibrator);
+  // Länka ihop så du kan anropa updateTable i stopDrag()
+  calibrator.manager = manager;
+
+  // 4) Beräkna första skala och visa tabell
+  calibrator.recalcScale();
+  manager.updateTable();
+
+  // 5) Gör tool responsivt vid fönster‑resize
+  window.addEventListener('resize', () => {
+    canvas.width  = canvas.parentElement.clientWidth;
+    canvas.height = canvas.parentElement.clientHeight;
+    calibrator.resetForCanvas();
+  });
+
+  // 6) Starta render‑loop: bild → axlar → punkter
+  (function render() {
+    imgH.draw();
+    calibrator.drawAxes();
+    manager.drawPoints(imgH.ctx);
+    requestAnimationFrame(render);
+  })();
+});
+
+
+
+// Stäng modalen när man klickar på krysset
+document.querySelector('.modal-close').addEventListener('click', () => {
+  document.getElementById('intro-modal').style.display = 'none';
+});
+
+
+    class ImageHandler {
+      constructor(canvas) {
+        this.canvas = canvas;
+        this.ctx = canvas.getContext('2d');
+        this.img = new Image();
+        this.loaded = false;
+        this.offsetX = 0;
+        this.offsetY = 0;
+        this.imgW = 0;
+        this.imgH = 0;
+        this.resizing = false;
+        this.dragging = false;
+        this.dragStart = { x: 0, y: 0 };
+        this.handleSize = 8;
+        this.ratio = 1;
+
+        document.getElementById('upload').addEventListener('change', e => this.load(e));
+        canvas.addEventListener('mousedown', e => this.onMouseDown(e));
+        canvas.addEventListener('mousemove', e => this.onMouseMove(e));
+        canvas.addEventListener('mouseup', () => this.onMouseUp());
+
+        window.imageHandler = this;
+      }
+
+      
+
+      load(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+        this.img.src = URL.createObjectURL(file);
+        this.img.onload = () => {
+          this.loaded = true;
+          this.imgW = this.img.width;
+          this.imgH = this.img.height;
+          this.ratio = this.imgH / this.imgW;
+          this.offsetX = (this.canvas.width - this.imgW) / 2;
+          this.offsetY = (this.canvas.height - this.imgH) / 2;
+          document.getElementById('error').textContent = '';
+        };
+      }
+
+      onMouseDown(e) {
+          // Om lockImage är ikryssad, gör ingenting
+  if (document.getElementById('lockImage').checked) return;
+  if (!this.loaded) return;
+
+  const mx = e.offsetX;
+  const my = e.offsetY;
+
+  // 1. Kolla om man klickar på resize-hörnet (svart hörn)
+  const rx = this.offsetX + this.imgW;
+  const ry = this.offsetY + this.imgH;
+  if (Math.hypot(mx - rx, my - ry) < this.handleSize * 2) {
+    this.resizing = true;
+    return;
+  }
+
+  // 2. Kolla om man klickar på flytt-handtaget (blå boll i nedre vänster)
+  const dragHandleX = this.offsetX;
+  const dragHandleY = this.offsetY + this.imgH;
+  if (Math.hypot(mx - dragHandleX, my - dragHandleY) < this.handleSize * 2) {
+    this.dragging = true;
+    this.dragStart = { x: mx, y: my };
+    return;
+  }
+}
+
+
+      onMouseMove(e) {
+        if (this.resizing) {
+          let newW = e.offsetX - this.offsetX;
+          if (newW < 20) newW = 20;
+          this.imgW = newW;
+          this.imgH = newW * this.ratio;
+        } else if (this.dragging) {
+          const dx = e.offsetX - this.dragStart.x;
+          const dy = e.offsetY - this.dragStart.y;
+          this.offsetX += dx;
+          this.offsetY += dy;
+          this.dragStart = { x: e.offsetX, y: e.offsetY };
+        }
+      }
+
+      onMouseUp() {
+  if (this.dragging) {
+    // Snappa till rutnät (20px)
+    const step = 20;
+    this.offsetX = Math.round(this.offsetX / step) * step;
+    this.offsetY = Math.round(this.offsetY / step) * step;
+  }
+
+  this.resizing = false;
+  this.dragging = false;
+}
+
+
+      drawGrid() {
+        const step = 20;
+        this.ctx.save();
+        this.ctx.strokeStyle = '#e0e0e0';
+        this.ctx.lineWidth = 1;
+        for (let x = 0; x <= this.canvas.width; x += step) {
+          this.ctx.beginPath();
+          this.ctx.moveTo(x, 0);
+          this.ctx.lineTo(x, this.canvas.height);
+          this.ctx.stroke();
+        }
+        for (let y = 0; y <= this.canvas.height; y += step) {
+          this.ctx.beginPath();
+          this.ctx.moveTo(0, y);
+          this.ctx.lineTo(this.canvas.width, y);
+          this.ctx.stroke();
+        }
+        this.ctx.restore();
+      }
+
+      draw() {
+        const lockedImg = document.getElementById('lockImage').checked;
+  this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+  this.drawGrid();
+  if (this.loaded) {
+    this.ctx.drawImage(this.img, this.offsetX, this.offsetY, this.imgW, this.imgH);
+
+ // Rita resize‑handtag
+this.ctx.fillStyle = lockedImg ? '#888' : 'black';
+this.ctx.fillRect(
+  this.offsetX + this.imgW - this.handleSize,
+  this.offsetY + this.imgH - this.handleSize,
+  this.handleSize * 2,
+  this.handleSize * 2
+);
+
+
+// Rita drag‑handtag
+this.ctx.fillStyle = lockedImg ? '#888' : 'blue';
+this.ctx.beginPath();
+this.ctx.arc(
+  this.offsetX,
+  this.offsetY + this.imgH,
+  this.handleSize,
+  0, 2 * Math.PI
+);
+this.ctx.fill();
+
+  }
+}
+    }
+
+    class AxisCalibrator {
+      constructor(canvas) {
+        this.canvas = canvas;
+        this.ctx = canvas.getContext('2d');
+        this.handleSize = 6;
+        this.initHandles();
+        this.dragX = this.dragY = this.dragO = false;
+        this.scaleX = this.scaleY = null;
+        this.initEvents();
+      }
+
+       recalcScale() {
+    const xMin = parseFloat(document.getElementById('xMin').value);
+    const xMax = parseFloat(document.getElementById('xMax').value);
+    const yMin = parseFloat(document.getElementById('yMin').value);
+    const yMax = parseFloat(document.getElementById('yMax').value);
+    // Omvärdera bara om giltiga tal finns
+    if (!isNaN(xMin) && !isNaN(xMax) && this.xHandle && this.origin) {
+      const px = this.xHandle.x - this.origin.x;   // ny pixel–längd x‑axeln
+      this.scaleX = (xMax - xMin) / px;
+    }
+    if (!isNaN(yMin) && !isNaN(yMax) && this.yHandle && this.origin) {
+      const py = this.origin.y - this.yHandle.y;   // ny pixel–längd y‑axeln
+      this.scaleY = (yMax - yMin) / py;
+    }
+  }
+  
+
+ initHandles() {
+    const step = 20;                                        // samma avstånd som rutnätet
+    const cx   = this.canvas.width  / 2;                    // mitt på canvas
+    const cy   = this.canvas.height / 2;
+
+    // Snäppa origo till närmsta grid‐linje
+    this.origin = {
+      x: Math.round(cx / step) * step,
+      y: Math.round(cy / step) * step
+    };
+
+    // Sätt handtagen relativt origo
+    const defaultLen = 100; // eller vad du vill ha som start‐längd
+    this.xHandle = { x: this.origin.x + defaultLen, y: this.origin.y };
+    this.yHandle = { x: this.origin.x,                y: this.origin.y - defaultLen };
+  }
+
+      resetForCanvas() {
+        this.initHandles();
+      }
+
+      initEvents() {
+        this.canvas.addEventListener('mousedown', e => this.startDrag(e));
+        this.canvas.addEventListener('mousemove', e => this.onDrag(e));
+        this.canvas.addEventListener('mouseup', () => this.stopDrag());
+        ['xMin','xMax','yMin','yMax'].forEach(id => {
+        document.getElementById(id).addEventListener('input', () => {
+        this.recalcScale();
+        if (this.manager) this.manager.updateTable();
+         });
+
+  // 3) Lock axes – disabla/enable input‑fälten
+         document.getElementById('lockAxes')
+  .addEventListener('change', e => {
+    const locked = e.target.checked;
+    ['xMin','xMax','yMin','yMax'].forEach(id => {
+      document.getElementById(id).disabled = locked;
+    });
+  });
+});
+
+this.recalcScale();
+
+      }
+
+      setNumeric() {
+        const xMin = parseFloat(document.getElementById('xMin').value);
+        const xMax = parseFloat(document.getElementById('xMax').value);
+        const yMin = parseFloat(document.getElementById('yMin').value);
+        const yMax = parseFloat(document.getElementById('yMax').value);
+        if (xMin >= xMax || yMin >= yMax) {
+          document.getElementById('error').textContent = 'Fel: xMin < xMax & yMin < yMax';
+          return;
+        }
+        document.getElementById('error').textContent = '';
+        const px = this.xHandle.x - this.origin.x;
+        const py = this.origin.y - this.yHandle.y;
+        this.scaleX = (xMax - xMin) / px;
+        this.scaleY = (yMax - yMin) / py;
+      }
+
+      startDrag(e) {
+        const d = this.handleSize * 2;
+        if (document.getElementById('lockAxes').checked) return;
+        if (Math.hypot(e.offsetX - this.xHandle.x, e.offsetY - this.xHandle.y) < d) { this.dragX = true; return; }
+        if (Math.hypot(e.offsetX - this.yHandle.x, e.offsetY - this.yHandle.y) < d) { this.dragY = true; return; }
+        if (Math.hypot(e.offsetX - this.origin.x, e.offsetY - this.origin.y) < d) { this.dragO = true; }
+      }
+
+      onDrag(e) {
+  if (this.dragX || this.dragY || this.dragO) {
+    showZoom(this.canvas, e.offsetX, e.offsetY);
+  }
+
+  if (this.dragX) {
+    this.xHandle.x = e.offsetX;
+    this.xHandle.y = this.origin.y;
+    this.recalcScale();  
+  } else if (this.dragY) {
+    this.yHandle.x = this.origin.x;
+    this.yHandle.y = e.offsetY;
+    this.recalcScale();  
+  } else if (this.dragO) {
+    const dx = e.offsetX - this.origin.x;
+    const dy = e.offsetY - this.origin.y;
+    this.origin = { x: e.offsetX, y: e.offsetY };
+    this.xHandle.x += dx;
+    this.xHandle.y += dy;
+    this.yHandle.x += dx;
+    this.yHandle.y += dy;
+  }
+}
+
+
+
+      stopDrag() {
+  this.dragX = this.dragY = this.dragO = false;
+  document.getElementById('zoomCanvas').style.display = 'none';
+
+  // Efter att zoomCanvas döljs, uppdatera tabellen
+  if (this.manager) {
+    this.manager.updateTable();
+  }
+}
+
+
+drawAxes() {
+  const ctx = this.ctx;
+    const locked = document.getElementById('lockAxes').checked;
+  ctx.save();
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = 'red';
+
+  // Rita axlar
+  ctx.beginPath();
+  ctx.moveTo(this.origin.x, this.origin.y);
+  ctx.lineTo(this.xHandle.x, this.xHandle.y);
+  ctx.moveTo(this.origin.x, this.origin.y);
+  ctx.lineTo(this.yHandle.x, this.yHandle.y);
+  ctx.stroke();
+
+// Rita X‑handle
+ctx.beginPath();
+ctx.arc(this.xHandle.x, this.xHandle.y, this.handleSize, 0, 2 * Math.PI);
+if (locked) {
+  ctx.fillStyle = '#888';
+  ctx.fill();
+} else if (this.dragX) {
+  ctx.strokeStyle = 'red';
+  ctx.stroke();
+} else {
+  ctx.fillStyle = 'red';
+  ctx.fill();
+}
+
+
+// Rita Y‑handle
+ctx.beginPath();
+ctx.arc(this.yHandle.x, this.yHandle.y, this.handleSize, 0, 2 * Math.PI);
+if (locked) {
+  ctx.fillStyle = '#888';
+  ctx.fill();
+} else if (this.dragY) {
+  ctx.strokeStyle = 'red';
+  ctx.stroke();
+} else {
+  ctx.fillStyle = 'red';
+  ctx.fill();
+}
+
+
+// Rita Origo
+ctx.beginPath();
+ctx.arc(this.origin.x, this.origin.y, this.handleSize, 0, 2 * Math.PI);
+if (locked) {
+  ctx.fillStyle = '#888';
+  ctx.fill();
+} else if (this.dragO) {
+  ctx.strokeStyle = 'blue';
+  ctx.stroke();
+} else {
+  ctx.fillStyle = 'blue';
+  ctx.fill();
+}
+
+
+  // Etiketter
+  ctx.fillStyle = 'black';
+  ctx.font = '12px Arial';
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'top';
+ 
+
+// Hämta strängvärdena (tomma om inga tal)
+const xMinStr = document.getElementById('xMin').value;
+const yMinStr = document.getElementById('yMin').value;
+const xMaxStr = document.getElementById('xMax').value;
+const yMaxStr = document.getElementById('yMax').value;
+// Rita dynamic label
+ctx.fillText(`o(${xMinStr},${yMinStr})`, this.origin.x + 8, this.origin.y + 8);
+ctx.fillText(`x(${xMaxStr},${yMinStr})`, this.xHandle.x + 8, this.xHandle.y + 8);
+ctx.fillText(`y(${xMinStr},${yMaxStr})`, this.yHandle.x + 8, this.yHandle.y + 8);
+
+// … efter etiketterna, men fortfarande innanför ctx.save()/ctx.restore()
+const ext = document.getElementById('extendedAxes').checked;
+if (ext) {
+  ctx.save();
+  ctx.setLineDash([5, 5]);            // 5px streck, 5px mellanrum
+  ctx.strokeStyle = '#888';           // lite diskretare färg
+  ctx.lineWidth = 1;
+
+  // Horisontell streckad linje
+  ctx.beginPath();
+  ctx.moveTo(0, this.origin.y);
+  ctx.lineTo(this.canvas.width, this.origin.y);
+  ctx.stroke();
+
+  // Vertikal streckad linje
+  ctx.beginPath();
+  ctx.moveTo(this.origin.x, 0);
+  ctx.lineTo(this.origin.x, this.canvas.height);
+  ctx.stroke();
+
+  ctx.restore();
+}
+
+ctx.restore();  // återställ från huvud-save()
+
+
+
+  ctx.restore();
+}
+
+
+
+
+      toDataCoords(px, py) {
+  if (this.scaleX === null || this.scaleY === null) return null;
+  const dx = px - this.origin.x;
+  const dy = this.origin.y - py;
+  const val = document.getElementById('decimalSelect').value;
+  const decimals = val === '' ? 3 : parseInt(val);
+
+  return {
+    x: (parseFloat(document.getElementById('xMin').value) + dx * this.scaleX).toFixed(decimals),
+    y: (parseFloat(document.getElementById('yMin').value) + dy * this.scaleY).toFixed(decimals)
+  };
+}
+
+
+
+      isDragging() {
+        return this.dragX || this.dragY || this.dragO;
+      }
+    }
+
+    class PointManager {
+      constructor(cal) {
+        this.cal = cal;
+        this.canvas = cal.canvas;
+        this.points = [];
+        this.init();
+      }
+
+      init() {
+        this.canvas.addEventListener('mousedown', e => {
+          if (!this.cal.isDragging() && !window.imageHandler.dragging) {
+            this.addPoint(e);
+          }
+        });
+
+        this.canvas.addEventListener('mousemove', e => {
+  const toggle = document.getElementById('pointerZoomToggle');
+  const zoomCanvas = document.getElementById('pointerZoomCanvas');
+
+  if (toggle && toggle.checked) {
+    showZoom(this.canvas, e.offsetX, e.offsetY, 'pointerZoomCanvas');
+  } else {
+    if (zoomCanvas) zoomCanvas.style.display = 'none';
+  }
+});
+
+
+        document.getElementById('undo').addEventListener('click', () => this.undo());
+        document.getElementById('clear').addEventListener('click', () => this.clear());
+        document.getElementById('download').addEventListener('click', () => this.download());
+        document.getElementById('decimalSelect').addEventListener('input', () => this.updateTable());
+
+        
+
+      }
+
+      addPoint(e) {
+    const imgH = window.imageHandler;
+  if (
+    this.cal.isDragging() ||
+    (imgH && (imgH.dragging || imgH.resizing))
+  ) return;
+
+  if (this.cal.scaleX === null || this.cal.scaleY === null) {
+    // Inget alert, bara ignorera klicket
+    return;
+  }
+
+  const rect = this.canvas.getBoundingClientRect();
+  const scaleX = this.canvas.width / rect.width;
+  const scaleY = this.canvas.height / rect.height;
+  const px = (e.clientX - rect.left) * scaleX;
+  const py = (e.clientY - rect.top) * scaleY;
+  const d = this.cal.toDataCoords(px, py);
+
+  this.points.push({ x: d.x, y: d.y, px, py });
+  this.updateTable();
+}
+
+
+      undo() {
+        this.points.pop();
+        this.updateTable();
+      }
+
+      clear() {
+        this.points = [];
+        this.updateTable();
+      }
+
+      updateTable() {
+  document.getElementById('undo').disabled = this.points.length === 0;
+  const tbody = document.querySelector('#table-container tbody');
+  tbody.innerHTML = '';
+  this.points.forEach((p, i) => {
+    // Beräkna om varje punkt med aktuell kalibrering
+    const d = this.cal.toDataCoords(p.px, p.py);
+    const row = document.createElement('tr');
+    row.innerHTML = `<td>${i + 1}</td><td>${d.x}</td><td>${d.y}</td>`;
+    tbody.appendChild(row);
+  });
+}
+
+
+
+      drawPoints(ctx) {
+        ctx.save();
+        ctx.strokeStyle = 'green';
+        ctx.lineWidth = 2;
+        this.points.forEach(p => {
+          const s = 6;
+          ctx.beginPath();
+          ctx.moveTo(p.px - s, p.py - s);
+          ctx.lineTo(p.px + s, p.py + s);
+          ctx.moveTo(p.px + s, p.py - s);
+          ctx.lineTo(p.px - s, p.py + s);
+          ctx.stroke();
+        });
+        ctx.restore();
+      }
+
+      download() {
+        const csv = 'x,y\n' + this.points.map(p => `${p.x},${p.y}`).join('\n');
+        const blob = new Blob([csv], { type: 'text/csv' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'data.csv';
+        a.click();
+      }
+    }
+    document.getElementById('reset').addEventListener('click', (e) => {
+  e.preventDefault();  
+  if (confirm('Are you sure you want to reset the grapher?')) {
+    location.reload();
+  }
+});
+
+// Öppna modal när man klickar på Help-knappen
+document.getElementById('help').addEventListener('click', () => {
+  const modal = document.getElementById('intro-modal');
+  modal.style.display = 'flex';
+  // om du låst scroll via CSS: body { overflow: hidden; } när modalen öppnas
+  document.body.style.overflow = 'hidden';
+});
+
+// Se till att återställa scroll när modalen stängs:
+document.querySelector('.modal-close').addEventListener('click', () => {
+  document.getElementById('intro-modal').style.display = 'none';
+  document.body.style.overflow = '';
+});
+
+
+    // Initiering
+    
+// Funktion för zoomförstoring
+function showZoom(canvas, x, y, canvasId = 'zoomCanvas') {
+  const zoomCanvas = document.getElementById(canvasId);
+  const zoomCtx = zoomCanvas.getContext('2d');
+  const ctx = canvas.getContext('2d');
+
+  const size = 20;
+
+  zoomCanvas.style.left = (x + 20) + 'px';
+  zoomCanvas.style.top = (y + 20) + 'px';
+  zoomCanvas.style.display = 'block';
+
+  const sx = Math.max(0, x - size / 2);
+  const sy = Math.max(0, y - size / 2);
+  zoomCtx.imageSmoothingEnabled = false;
+  zoomCtx.clearRect(0, 0, zoomCanvas.width, zoomCanvas.height);
+  zoomCtx.drawImage(canvas, sx, sy, size, size, 0, 0, zoomCanvas.width, zoomCanvas.height);
+
+  zoomCtx.strokeStyle = 'red';
+  zoomCtx.beginPath();
+  zoomCtx.moveTo(zoomCanvas.width / 2, 0);
+  zoomCtx.lineTo(zoomCanvas.width / 2, zoomCanvas.height);
+  zoomCtx.moveTo(0, zoomCanvas.height / 2);
+  zoomCtx.lineTo(zoomCanvas.width, zoomCanvas.height / 2);
+  zoomCtx.stroke();
+
+  zoomCtx.save();
+  zoomCtx.globalAlpha = 0.5;
+  zoomCtx.fillStyle = 'blue';
+  zoomCtx.beginPath();
+  zoomCtx.arc(zoomCanvas.width / 2, zoomCanvas.height / 2, 6, 0, 2 * Math.PI);
+  zoomCtx.fill();
+  zoomCtx.restore();
+}
+
+    (function() {
+    const canvas = document.getElementById('canvas');
+    // Sätt canvas‑storlek direkt utifrån behållaren
+    canvas.width  = canvas.parentElement.clientWidth;
+    canvas.height = canvas.parentElement.clientHeight;
+
+    const calibrator = new AxisCalibrator(canvas);
+    const imgH       = new ImageHandler(canvas);
+    const manager    = new PointManager(calibrator);
+    calibrator.manager = manager;
+
+    // Responsiv om ritfältet ändrar storlek
+    window.addEventListener('resize', () => {
+      canvas.width  = canvas.parentElement.clientWidth;
+      canvas.height = canvas.parentElement.clientHeight;
+      calibrator.resetForCanvas();
+    });
+
+    // Direkt efter instansiering:
+calibrator.recalcScale();   // räkna första gången
+manager.updateTable();      // visa tabellen med startvärden
+
+    // Render‑loop: bild, axlar, punkter
+    function render() {
+      imgH.draw();
+      calibrator.drawAxes();
+      manager.drawPoints(imgH.ctx);
+      requestAnimationFrame(render);
+    }
+    render();
+  })();
+
+  
+  </script>
+</body>
+</html>
