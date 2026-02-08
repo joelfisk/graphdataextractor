@@ -74,8 +74,8 @@
       button { margin-top: 10px; padding: 6px 12px; border: none; border-radius: 4px; background: #007bff; color: #fff; cursor: pointer; }
       button:disabled { background: #aaa; cursor: not-allowed; }
 
-      #canvas-container { flex: 1; position: relative; background: #eee; margin: 0; border: 2px solid #ccc; border-radius: 4px; }
-      #canvas { display: block; background: #fff; width: 100%; height: 100%; position: absolute; top: 0; left: 0; }
+      #canvas-container { flex: 1; position: relative; background: #eee; margin: 0; border: 2px solid #ccc; border-radius: 4px; touch-action: none; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+      #canvas { display: block; background: #fff; width: 100%; height: 100%; position: absolute; top: 0; left: 0; touch-action: none; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
 
       table { width: 100%; border-collapse: collapse; margin-top: 10px; }
       th, td { border: 1px solid #ccc; padding: 4px; text-align: center; }
@@ -537,9 +537,10 @@ class ImageHandler {
     this.currentObjectUrl = null;
 
     document.getElementById('upload').addEventListener('change', e => this.load(e));
-    canvas.addEventListener('mousedown', e => this.onMouseDown(e));
-    canvas.addEventListener('mousemove', e => this.onMouseMove(e));
-    canvas.addEventListener('mouseup', () => this.onMouseUp());
+    canvas.addEventListener('pointerdown', e => this.onMouseDown(e));
+    canvas.addEventListener('pointermove', e => this.onMouseMove(e));
+    canvas.addEventListener('pointerup', () => this.onMouseUp());
+    canvas.addEventListener('pointercancel', () => this.onMouseUp());
 
     window.imageHandler = this;
   }
@@ -587,6 +588,7 @@ class ImageHandler {
     };
   }
   onMouseDown(e) {
+    if (e.cancelable) e.preventDefault();
     if (document.getElementById('lockImage').checked) return;
     if (!this.loaded) return;
     const { x: mx, y: my } = getMouseCSS(e, this.canvas);
@@ -598,6 +600,9 @@ class ImageHandler {
     }
   }
   onMouseMove(e) {
+    if (this.resizing || this.dragging) {
+      if (e.cancelable) e.preventDefault();
+    }
     const { x, y } = getMouseCSS(e, this.canvas);
     if (this.resizing) {
       let newW = x - this.offsetX; if (newW < 20) newW = 20;
@@ -694,9 +699,10 @@ class AxisCalibrator {
   }
   resetForCanvas() { this.initHandles(); }
   initEvents() {
-    this.canvas.addEventListener('mousedown', e => this.startDrag(e));
-    this.canvas.addEventListener('mousemove', e => this.onDrag(e));
-    this.canvas.addEventListener('mouseup', () => this.stopDrag());
+    this.canvas.addEventListener('pointerdown', e => this.startDrag(e));
+    this.canvas.addEventListener('pointermove', e => this.onDrag(e));
+    this.canvas.addEventListener('pointerup', () => this.stopDrag());
+    this.canvas.addEventListener('pointercancel', () => this.stopDrag());
 
     ['xMin','xMax','yMin','yMax'].forEach(id => {
       document.getElementById(id).addEventListener('input', () => {
@@ -724,6 +730,7 @@ class AxisCalibrator {
     this.recalcScale();
   }
   startDrag(e) {
+    if (e.cancelable) e.preventDefault();
     if (document.getElementById('lockAxes').checked) return;
     const { x, y } = getMouseCSS(e, this.canvas); const d = this.handleSize * 2;
     if (Math.hypot(x - this.xHandle.x, y - this.xHandle.y) < d) { this.dragX = true; return; }
@@ -731,6 +738,9 @@ class AxisCalibrator {
     if (Math.hypot(x - this.origin.x,  y - this.origin.y)  < d) { this.dragO = true; }
   }
   onDrag(e) {
+    if (this.dragX || this.dragY || this.dragO) {
+      if (e.cancelable) e.preventDefault();
+    }
     const { x, y } = getMouseCSS(e, this.canvas);
     if (this.dragX || this.dragY || this.dragO) { showZoom(this.canvas, x, y); }
     if (this.dragX) { this.xHandle.x = x; this.xHandle.y = this.origin.y; this.recalcScale(); }
@@ -820,7 +830,8 @@ class PointManager {
       this.placingEnabled = !this.placingEnabled; btn.classList.toggle('active', this.placingEnabled);
       btn.textContent = this.placingEnabled ? 'Place points (ON)' : 'Place points';
     });
-    this.canvas.addEventListener('mousedown', e => {
+    this.canvas.addEventListener('pointerdown', e => {
+      if (e.cancelable) e.preventDefault();
       if (this.cal.isDragging() || window.imageHandler.dragging || window.imageHandler.resizing) return;
       const { x, y } = getMouseCSS(e, this.canvas);
       const hit = this.findPointAt(x, y);
@@ -832,20 +843,29 @@ class PointManager {
       if (this.placingEnabled) this.addPointAt(x, y);
       else this.selectPoint(-1);
     });
-    this.canvas.addEventListener('mousemove', e => {
+    this.canvas.addEventListener('pointermove', e => {
       if (this.draggingIndex >= 0) {
+        if (e.cancelable) e.preventDefault();
         const { x, y } = getMouseCSS(e, this.canvas);
         this.points[this.draggingIndex].cx = x;
         this.points[this.draggingIndex].cy = y;
         this.updateTable();
       }
     });
-    this.canvas.addEventListener('mousemove', e => {
+    this.canvas.addEventListener('pointermove', e => {
       const toggle = document.getElementById('pointerZoomToggle'); const zoomCanvas = document.getElementById('pointerZoomCanvas');
       const { x, y } = getMouseCSS(e, this.canvas);
       if (toggle && toggle.checked) { showZoom(this.canvas, x, y, 'pointerZoomCanvas'); } else { if (zoomCanvas) zoomCanvas.style.display = 'none'; }
     });
-    this.canvas.addEventListener('mouseup', () => {
+    this.canvas.addEventListener('pointerup', () => {
+      if (document.getElementById('pointerZoomCanvas')) document.getElementById('pointerZoomCanvas').style.display = 'none';
+      if (this.draggingIndex >= 0) {
+        this.draggingIndex = -1;
+        const hm = window.historyManager; if (hm) hm.save('move-point');
+      }
+    });
+    this.canvas.addEventListener('pointercancel', () => {
+      if (document.getElementById('pointerZoomCanvas')) document.getElementById('pointerZoomCanvas').style.display = 'none';
       if (this.draggingIndex >= 0) {
         this.draggingIndex = -1;
         const hm = window.historyManager; if (hm) hm.save('move-point');
